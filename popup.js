@@ -36,6 +36,7 @@ const viewBookmarks = (currentVideoBookmarks) =>{
     }else{
         bookmarksElement.innerHTML = `<div class="title">No bookmarks found.</div>`;
     }
+    return ;
 }
 
 const onPlay= async e=>{
