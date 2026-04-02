@@ -1,95 +1,223 @@
 import { getActiveTabURL } from "./utils.js";
 
-const addNewBookmark=(bookmarksElement,bookmark)=>{
-    const bookmarkTitleElement=document.createElement("div");
-    const newBookmarkElement=document.createElement("div");
-    const controlsElement=document.createElement("div");
+let currentVideoId = "";
+let activeTab = null;
 
-    bookmarkTitleElement.textContent=bookmark.desc;
-    bookmarkTitleElement.className="bookmark-title";
+// ── Render ────────────────────────────────────────────────────────────────
 
-    controlsElement.className="bookmark-controls";
+const addNewBookmark = (bookmarks, bookmark) => {
+  const newBookmarkElement = document.createElement("div");
+  newBookmarkElement.id = "bookmark-" + bookmark.time;
+  newBookmarkElement.className = "bookmark";
+  newBookmarkElement.setAttribute("timestamp", bookmark.time);
 
-    newBookmarkElement.id="bookmark-"+bookmark.time;
-    newBookmarkElement.className="bookmark";
-    newBookmarkElement.setAttribute("timestamp",bookmark.time);
+  // Left side: timestamp pill + description
+  const infoEl = document.createElement("div");
+  infoEl.className = "bookmark-info";
 
-    setBookmarkAttributes("play",onPlay,controlsElement);
-    setBookmarkAttributes("delete",onDelete,controlsElement);
+  const timeEl = document.createElement("span");
+  timeEl.className = "bookmark-time";
+  timeEl.textContent = getTime(bookmark.time);
 
-    newBookmarkElement.appendChild(bookmarkTitleElement);
-    newBookmarkElement.appendChild(controlsElement);
-    bookmarksElement.appendChild(newBookmarkElement);
+  const descEl = document.createElement("div");
+  descEl.className = "bookmark-title";
+  descEl.textContent = bookmark.desc;
+  descEl.title = "Click to edit";
+  descEl.addEventListener("click", () => onEdit(descEl, newBookmarkElement));
 
+  infoEl.appendChild(timeEl);
+  infoEl.appendChild(descEl);
 
+  // Right side: controls (play + delete only)
+  const controlsEl = document.createElement("div");
+  controlsEl.className = "bookmark-controls";
+
+  setBookmarkAttributes("play",   onPlay,   controlsEl);
+  setBookmarkAttributes("delete", onDelete, controlsEl);
+
+  newBookmarkElement.appendChild(infoEl);
+  newBookmarkElement.appendChild(controlsEl);
+  bookmarks.appendChild(newBookmarkElement);
 };
 
-const viewBookmarks = (currentVideoBookmarks) =>{
-    const bookmarksElement=document.getElementById("bookmarks");
-    bookmarksElement.innerHTML="";
+const viewBookmarks = (currentBookmarks = []) => {
+  const bookmarksElement = document.getElementById("bookmarks");
+  bookmarksElement.innerHTML = "";
 
-    if(currentVideoBookmarks.length > 0){
-        for(let i=0 ;i<currentVideoBookmarks.length;i++){
-            const bookmark=currentVideoBookmarks[i];
-            addNewBookmark(bookmarksElement,bookmark);
-        }
-    }else{
-        bookmarksElement.innerHTML = `<div class="title">No bookmarks found.</div>`;
+  if (currentBookmarks.length > 0) {
+    currentBookmarks.forEach((bookmark) =>
+      addNewBookmark(bookmarksElement, bookmark)
+    );
+  } else {
+    bookmarksElement.innerHTML = '<i class="empty-msg">No bookmarks yet — click the 🔖 button while watching!</i>';
+  }
+
+  // Update export button visibility
+  const exportBtn = document.getElementById("export-btn");
+  if (exportBtn) exportBtn.style.display = currentBookmarks.length > 0 ? "block" : "none";
+};
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+
+const showToast = (message, isError = false) => {
+  const existing = document.getElementById("toast");
+  if (existing) existing.remove();
+
+  const toast = document.createElement("div");
+  toast.id = "toast";
+  toast.textContent = message;
+  if (isError) toast.classList.add("toast-error");
+  document.body.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add("toast-visible"));
+
+  setTimeout(() => {
+    toast.classList.remove("toast-visible");
+    setTimeout(() => toast.remove(), 300);
+  }, 2000);
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+const getTime = (t) => {
+  const date = new Date(0);
+  date.setSeconds(t);
+  return date.toISOString().substr(11, 8);
+};
+
+const setBookmarkAttributes = (src, eventListener, controlParentElement) => {
+  const controlElement = document.createElement("img");
+  controlElement.src = "assets/" + src + ".png";
+  controlElement.title = src;
+  controlElement.addEventListener("click", eventListener);
+  controlParentElement.appendChild(controlElement);
+};
+
+// ── Actions ───────────────────────────────────────────────────────────────
+
+const onPlay = async (e) => {
+  const bookmarkTime = e.target.parentNode.parentNode.getAttribute("timestamp");
+  chrome.tabs.sendMessage(activeTab.id, {
+    type: "PLAY",
+    value: Number(bookmarkTime),
+  });
+};
+
+const onDelete = async (e) => {
+  const bookmarkTime = e.target.parentNode.parentNode.getAttribute("timestamp");
+  const el = document.getElementById("bookmark-" + bookmarkTime);
+  el.parentNode.removeChild(el);
+
+  chrome.tabs.sendMessage(
+    activeTab.id,
+    { type: "DELETE", value: bookmarkTime },
+    (updatedBookmarks) => {
+      viewBookmarks(updatedBookmarks);
+      showToast("🗑️ Bookmark deleted");
     }
-    return ;
-}
+  );
+};
 
-const onPlay= async e=>{
-    const bookmarkTime = e.target.parentNode.getAttribute("timestamp");
-    const activeTab=await getActiveTabURL();
-    
-    chrome.tabs.sendMessage(activeTab.id,{
-        type:"PLAY",
-        timestamp:bookmarkTime
-    })
-}
+const onEdit = (descEl, bookmarkEl) => {
+  if (bookmarkEl.querySelector(".bookmark-edit-input")) return; // already editing
 
+  const bookmarkTime = bookmarkEl.getAttribute("timestamp");
+  const currentDesc = descEl.textContent;
 
-const onDelete = async e =>{
-    const bookmarkTime = e.target.parentNode.getAttribute("timestamp");
-    const activeTab=await getActiveTabURL();
-    const bookmarkElementToDelete = document.getElementById("bookmark-"+bookmarkTime);
-    
-    bookmarkElementToDelete.parentNode.removeChild(bookmarkElementToDelete);
-    
-    chrome.tabs.sendMessage(activeTab.id,{
-        type:"DELETE",
-        timestamp:bookmarkTime
-    },viewBookmarks)
-}
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = currentDesc;
+  input.className = "bookmark-edit-input";
+  input.maxLength = 120;
 
-const setBookmarkAttributes = (src,addEventListener,controlParentElement) =>{
-    const controlElement=document.createElement("img");
+  descEl.replaceWith(input);
+  input.focus();
+  input.select();
 
-    controlElement.src="assets/"+src+".png";
-    controlElement.title=src;
-    controlElement.addEventListener("click",addEventListener);
-    controlParentElement.appendChild(controlElement);
-}
+  const commitEdit = () => {
+    const newDesc = input.value.trim() || currentDesc;
+    const newDescEl = document.createElement("div");
+    newDescEl.className = "bookmark-title";
+    newDescEl.textContent = newDesc;
+    newDescEl.title = "Click to edit";
+    newDescEl.addEventListener("click", () => onEdit(newDescEl, bookmarkEl));
+    input.replaceWith(newDescEl);
 
-document.addEventListener("DOM contentLoaded",async ()=>{
-    const activeTab = await getActiveTabURL();
-    const queryParameters=activeTab.url.split("?")[1];
-    const urlParameters=new URLSearchParams(queryParameters);
-
-    const currentVideo=urlParameters.get("v");
-    
-    if(activeTab.url.includes("youtube.com/watch") && currentVideo){
-        chrome.storage.sync.get([currentVideo] , (data) =>{
-            const currentVideoBookmarks=data[currentVideo]? JSON.parse(data[currentVideo]):[];
-
-            viewBookmarks(currentVideoBookmarks);
-
-        })
-    }else{
-        const container=document.getElementsByClassName("container")[0];
-        container.innerHTML="<div class='title'>This is not a youtube video page.</div>";
+    if (newDesc !== currentDesc) {
+      chrome.tabs.sendMessage(
+        activeTab.id,
+        { type: "EDIT", value: { time: bookmarkTime, desc: newDesc } },
+        () => showToast("✏️ Bookmark updated")
+      );
     }
-    
-})
+  };
 
+  input.addEventListener("blur", commitEdit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") input.blur();
+    if (e.key === "Escape") {
+      input.value = currentDesc;
+      input.blur();
+    }
+  });
+};
+
+// ── Export ────────────────────────────────────────────────────────────────
+
+const onExport = () => {
+  chrome.storage.sync.get([currentVideoId], (data) => {
+    const bookmarks = data[currentVideoId]
+      ? JSON.parse(data[currentVideoId])
+      : [];
+
+    if (!bookmarks.length) return;
+
+    const text = bookmarks
+      .map((b) => `[${getTime(b.time)}] ${b.desc}`)
+      .join("\n");
+
+    const videoUrl = `https://www.youtube.com/watch?v=${currentVideoId}`;
+    const full = `Bookmarks for: ${videoUrl}\n\n${text}`;
+
+    navigator.clipboard.writeText(full).then(() => {
+      showToast("📋 Copied to clipboard!");
+    });
+  });
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────
+
+document.addEventListener("DOMContentLoaded", async () => {
+  activeTab = await getActiveTabURL();
+  const queryParameters = activeTab.url.split("?")[1];
+  const urlParameters = new URLSearchParams(queryParameters);
+  currentVideoId = urlParameters.get("v");
+
+  if (activeTab.url.includes("youtube.com/watch") && currentVideoId) {
+    // Wire up export button
+    const exportBtn = document.getElementById("export-btn");
+    exportBtn.addEventListener("click", onExport);
+
+    chrome.storage.sync.get([currentVideoId], (data) => {
+      const bookmarks = data[currentVideoId]
+        ? JSON.parse(data[currentVideoId])
+        : [];
+      viewBookmarks(bookmarks);
+    });
+
+    // Live-refresh when a bookmark is saved while popup is open
+    chrome.runtime.onMessage.addListener((message) => {
+      if (
+        message.type === "BOOKMARK_SAVED" &&
+        message.videoId === currentVideoId
+      ) {
+        viewBookmarks(message.bookmarks);
+        showToast("✅ Bookmark saved!");
+      }
+    });
+  } else {
+    const container = document.getElementsByClassName("container")[0];
+    container.innerHTML =
+      '<div class="title">This is not a YouTube video page.</div>';
+  }
+});

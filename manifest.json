@@ -1,5 +1,5 @@
 {
-  "name": "My YT Bookmarks",
+  "name": "kush YT Bookmarks",
   "version": "0.1.0",
   "description": "Saving timestamps in YT videos",
   "permissions": [
@@ -41,7 +41,7 @@
       "24": "assets/ext-icon.png",
       "32": "assets/ext-icon.png"
     },
-    "default_title": "My YT Bookmarks",
+    "default_title": "kush YT Bookmarks",
     "default_popup": "popup.html"
   },
   "manifest_version": 3
