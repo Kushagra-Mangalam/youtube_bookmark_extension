@@ -23,3 +23,11 @@ chrome.runtime.onMessage.addListener((message) => {
     chrome.action.setBadgeBackgroundColor({ color: "#ff0000" });
   }
 });
+
+chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  if (message.type === "LOGIN_SUCCESS") {
+    chrome.storage.local.set({ token: message.token }, () => {
+      console.log("Token synced from website");
+    });
+  }
+});

@@ -11,13 +11,25 @@
     return date.toISOString().substr(11, 8);
   };
 
-  const fetchBookmarks = () =>
-    new Promise((resolve) => {
-      chrome.storage.sync.get([currentVideo], (obj) => {
-        resolve(obj[currentVideo] ? JSON.parse(obj[currentVideo]) : []);
-      });
-    });
+  // const fetchBookmarks = () =>
+  //   new Promise((resolve) => {
+  //     chrome.storage.sync.get([currentVideo], (obj) => {
+  //       resolve(obj[currentVideo] ? JSON.parse(obj[currentVideo]) : []);
+  //     });
+  //   });
 
+  const fetchBookmarks = async ()=>{
+    const {token} = await chrome.storage.local.get("token");
+    const res = await fetch(
+      `http://127.0.0.1:8000/api/bookmarks/?videoId=${currentVideo}`,
+      {
+        headers:{
+          Authorization: "Bearer " + token
+        }
+      }
+    );
+    return await res.json();
+  }
   const updateBadge = (bookmarks) => {
     chrome.runtime.sendMessage({
       type: "UPDATE_BADGE",
@@ -69,23 +81,45 @@
       const desc = note || "Bookmark at " + getTime(capturedTime);
       const newBookmark = { time: capturedTime, desc };
 
+      // currentVideoBookmarks = await fetchBookmarks();
+      // const updatedBookmarks = [...currentVideoBookmarks, newBookmark].sort(
+      //   (a, b) => a.time - b.time
+      // );
+
+      // chrome.storage.sync.set(
+      //   { [currentVideo]: JSON.stringify(updatedBookmarks) },
+      //   () => {
+      //     chrome.runtime.sendMessage({
+      //       type: "BOOKMARK_SAVED",
+      //       videoId: currentVideo,
+      //       bookmarks: updatedBookmarks,
+      //     });
+      //     updateBadge(updatedBookmarks);
+      //   }
+      // );
+
+      // closeModal(true);
+
+      const {token} = await chrome.storage.local.get("token");
+      await fetch("http://127.0.0.1:8000/api/bookmarks/add/",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":"Bearer " + token
+        },
+        body:JSON.stringify({
+          videoId:currentVideo,
+          time:capturedTime,
+          desc
+        })
+      })
       currentVideoBookmarks = await fetchBookmarks();
-      const updatedBookmarks = [...currentVideoBookmarks, newBookmark].sort(
-        (a, b) => a.time - b.time
-      );
-
-      chrome.storage.sync.set(
-        { [currentVideo]: JSON.stringify(updatedBookmarks) },
-        () => {
-          chrome.runtime.sendMessage({
-            type: "BOOKMARK_SAVED",
-            videoId: currentVideo,
-            bookmarks: updatedBookmarks,
-          });
-          updateBadge(updatedBookmarks);
-        }
-      );
-
+      chrome.runtime.sendMessage({
+        type:"BOOKMARK_SAVED",
+        videoId:currentVideo,
+        bookmarks:currentVideoBookmarks
+      })
+      updateBadge(currentVideoBookmarks);
       closeModal(true);
     };
 
