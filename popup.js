@@ -1,13 +1,75 @@
 import { getActiveTabURL } from "./utils.js";
 
+const API_BASE = "http://127.0.0.1:8000";
+
 let currentVideoId = "";
 let activeTab = null;
 
+// ── Authenticated Fetch ────────────────────────────────────────────────────
+// Wraps fetch with automatic token refresh on 401.
+
+async function authFetch(url, options = {}) {
+  const { token } = await chrome.storage.local.get("token");
+  if (!token) {
+    throw new Error("Not authenticated");
+  }
+
+  options.headers = {
+    ...options.headers,
+    Authorization: "Bearer " + token,
+  };
+
+  let res = await fetch(url, options);
+
+  // If 401, try refreshing the token
+  if (res.status === 401) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      // Retry with new token
+      const { token: newToken } = await chrome.storage.local.get("token");
+      options.headers.Authorization = "Bearer " + newToken;
+      res = await fetch(url, options);
+    } else {
+      // Refresh failed — clear tokens and force re-login
+      await chrome.storage.local.remove(["token", "refreshToken"]);
+      location.reload();
+      throw new Error("Session expired. Please login again.");
+    }
+  }
+
+  return res;
+}
+
+async function tryRefreshToken() {
+  const { refreshToken } = await chrome.storage.local.get("refreshToken");
+  if (!refreshToken) return false;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/token/refresh/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh: refreshToken }),
+    });
+
+    if (!res.ok) return false;
+
+    const data = await res.json();
+    if (data.access) {
+      await chrome.storage.local.set({ token: data.access });
+      // If backend rotates refresh tokens, update it too
+      if (data.refresh) {
+        await chrome.storage.local.set({ refreshToken: data.refresh });
+      }
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // ── Authentication ─────────────────────────────────────────────────────────
 
-/**
- * Handles the login process and stores the token in local storage.
- */
 function setupLoginListener() {
   const loginBtn = document.getElementById("login-btn");
   if (!loginBtn) return;
@@ -22,7 +84,7 @@ function setupLoginListener() {
     }
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/auth/login/", {
+      const res = await fetch(`${API_BASE}/api/auth/login/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -30,8 +92,11 @@ function setupLoginListener() {
 
       const data = await res.json();
       if (data.token && data.token.access) {
-        // Save the access token and reload to show the main container
-        await chrome.storage.local.set({ token: data.token.access });
+        // Save BOTH access and refresh tokens
+        await chrome.storage.local.set({
+          token: data.token.access,
+          refreshToken: data.token.refresh,
+        });
         location.reload();
       } else {
         alert(data.error || "Login failed. Please check your credentials.");
@@ -45,19 +110,9 @@ function setupLoginListener() {
 
 // ── Data Fetching ──────────────────────────────────────────────────────────
 
-/**
- * Fetches bookmarks for the current video from the backend.
- */
 const fetchBookmarks = async () => {
-  const { token } = await chrome.storage.local.get("token");
-
-  const res = await fetch(
-    `http://127.0.0.1:8000/api/bookmarks/?videoId=${currentVideoId}`,
-    {
-      headers: {
-        Authorization: "Bearer " + token,
-      },
-    }
+  const res = await authFetch(
+    `${API_BASE}/api/bookmarks/?videoId=${currentVideoId}`
   );
   return await res.json();
 };
@@ -163,22 +218,23 @@ const onPlay = async (e) => {
 
 const onDelete = async (e) => {
   const bookmarkTime = e.target.parentNode.parentNode.getAttribute("timestamp");
-  const { token } = await chrome.storage.local.get("token");
 
-  await fetch("http://127.0.0.1:8000/api/bookmarks/delete/", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + token,
-    },
-    body: JSON.stringify({
-      videoId: currentVideoId,
-      time: bookmarkTime,
-    }),
-  });
+  try {
+    await authFetch(`${API_BASE}/api/bookmarks/delete/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        videoId: currentVideoId,
+        time: bookmarkTime,
+      }),
+    });
 
-  const updated = await fetchBookmarks();
-  viewBookmarks(updated);
+    const updated = await fetchBookmarks();
+    viewBookmarks(updated);
+    showToast("🗑️ Bookmark deleted");
+  } catch (err) {
+    showToast("Error deleting bookmark", true);
+  }
 };
 
 const onEdit = (descEl, bookmarkEl) => {
@@ -207,15 +263,10 @@ const onEdit = (descEl, bookmarkEl) => {
     input.replaceWith(newDescEl);
 
     if (newDesc !== currentDesc) {
-      const { token } = await chrome.storage.local.get("token");
-
       try {
-        await fetch("http://127.0.0.1:8000/api/bookmarks/edit/", {
+        await authFetch(`${API_BASE}/api/bookmarks/edit/`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + token,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             videoId: currentVideoId,
             time: bookmarkTime,
@@ -244,7 +295,6 @@ const onEdit = (descEl, bookmarkEl) => {
 };
 
 const onExport = () => {
-  // Fetches from backend to ensure data is synced
   fetchBookmarks().then((bookmarks) => {
     if (!bookmarks || !bookmarks.length) return;
 
@@ -260,6 +310,18 @@ const onExport = () => {
     });
   });
 };
+
+// ── Logout ────────────────────────────────────────────────────────────────
+
+function setupLogoutListener() {
+  const logoutBtn = document.getElementById("logout-btn");
+  if (!logoutBtn) return;
+
+  logoutBtn.addEventListener("click", async () => {
+    await chrome.storage.local.remove(["token", "refreshToken"]);
+    location.reload();
+  });
+}
 
 // ── Initialization ────────────────────────────────────────────────────────
 
@@ -278,6 +340,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (authContainer) authContainer.style.display = "none";
     if (mainContainer) mainContainer.style.display = "block";
 
+    setupLogoutListener();
+
     activeTab = await getActiveTabURL();
     const queryParameters = activeTab.url.split("?")[1];
     const urlParameters = new URLSearchParams(queryParameters);
@@ -287,8 +351,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       const exportBtn = document.getElementById("export-btn");
       if (exportBtn) exportBtn.addEventListener("click", onExport);
 
-      const bookmarks = await fetchBookmarks();
-      viewBookmarks(bookmarks);
+      try {
+        const bookmarks = await fetchBookmarks();
+        viewBookmarks(bookmarks);
+      } catch (err) {
+        console.error("Failed to fetch bookmarks:", err);
+        viewBookmarks([]);
+      }
 
       // Listen for background messages to update list live
       chrome.runtime.onMessage.addListener(async (message) => {

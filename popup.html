@@ -6,28 +6,23 @@
 </head>
 
 <body>
-    <div id="logged-out-view" style="display: none; text-align: center; padding: 24px;">
-        <div style="font-size: 14px; margin-bottom: 16px; color: #444;">
-            Sign in to your account to access and save your YouTube bookmarks.
-        </div>
-        <a href="http://localhost:3000/login" id="login-link" target="_blank"
-            style="display: block; background: #ff0000; color: white; text-decoration: none; padding: 10px; border-radius: 6px; font-weight: 600;">
-            Go to Website / Login
-        </a>
-    </div>
-    <div id="logged-in-view" class="container" style="display: none;">
-    </div>
+    <!-- Auth view: shown when no token is stored -->
     <div id="auth-container" style="display: none; padding: 20px;">
-        <div class="title">Login to Vortex</div>
-        <input id="email" type="email" placeholder="Email" style="width:100%; margin: 5px 0;">
-        <input id="password" type="password" placeholder="Password" style="width:100%; margin: 5px 0;">
+        <div class="title" style="margin-bottom: 12px;">Login to YTMarker's</div>
+        <input id="email" type="email" placeholder="Email" style="width:100%; margin: 5px 0; padding: 8px; box-sizing: border-box; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff;">
+        <input id="password" type="password" placeholder="Password" style="width:100%; margin: 5px 0; padding: 8px; box-sizing: border-box; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff;">
         <button id="login-btn"
-            style="width:100%; background: #ff0000; color: white; border: none; padding: 8px;">Login</button>
+            style="width:100%; background: #ff0000; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 8px;">Login</button>
     </div>
-    <div id="main-container" class="container">
+
+    <!-- Main view: shown when authenticated -->
+    <div id="main-container" class="container" style="display: none;">
         <div class="header">
             <div class="title">Your Bookmarks</div>
-            <button id="export-btn">Copy All</button>
+            <div style="display: flex; gap: 6px;">
+                <button id="export-btn">Copy All</button>
+                <button id="logout-btn" title="Logout" style="background: #333; border: 1px solid #555; color: #aaa; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;">Logout</button>
+            </div>
         </div>
         <div class="bookmarks" id="bookmarks"></div>
     </div>

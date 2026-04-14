@@ -1,4 +1,6 @@
 (() => {
+  const API_BASE = "http://127.0.0.1:8000";
+
   let youtubeLeftControls, youtubePlayer;
   let currentVideo = "";
   let currentVideoBookmarks = [];
@@ -11,25 +13,75 @@
     return date.toISOString().substr(11, 8);
   };
 
-  // const fetchBookmarks = () =>
-  //   new Promise((resolve) => {
-  //     chrome.storage.sync.get([currentVideo], (obj) => {
-  //       resolve(obj[currentVideo] ? JSON.parse(obj[currentVideo]) : []);
-  //     });
-  //   });
+  // ── Authenticated Fetch (with token refresh) ─────────────────────────────
 
-  const fetchBookmarks = async ()=>{
-    const {token} = await chrome.storage.local.get("token");
-    const res = await fetch(
-      `http://127.0.0.1:8000/api/bookmarks/?videoId=${currentVideo}`,
-      {
-        headers:{
-          Authorization: "Bearer " + token
-        }
+  async function authFetch(url, options = {}) {
+    const { token } = await chrome.storage.local.get("token");
+    if (!token) {
+      console.warn("[YT Bookmarks] No token found. User not logged in.");
+      return null;
+    }
+
+    options.headers = {
+      ...options.headers,
+      Authorization: "Bearer " + token,
+    };
+
+    let res = await fetch(url, options);
+
+    // If 401, try refreshing the token
+    if (res.status === 401) {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) {
+        const { token: newToken } = await chrome.storage.local.get("token");
+        options.headers.Authorization = "Bearer " + newToken;
+        res = await fetch(url, options);
+      } else {
+        console.warn("[YT Bookmarks] Token refresh failed. Session expired.");
+        return null;
       }
-    );
-    return await res.json();
+    }
+
+    return res;
   }
+
+  async function tryRefreshToken() {
+    const { refreshToken } = await chrome.storage.local.get("refreshToken");
+    if (!refreshToken) return false;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/token/refresh/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+
+      if (!res.ok) return false;
+
+      const data = await res.json();
+      if (data.access) {
+        await chrome.storage.local.set({ token: data.access });
+        if (data.refresh) {
+          await chrome.storage.local.set({ refreshToken: data.refresh });
+        }
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  // ── Data Fetching ────────────────────────────────────────────────────────
+
+  const fetchBookmarks = async () => {
+    const res = await authFetch(
+      `${API_BASE}/api/bookmarks/?videoId=${currentVideo}`
+    );
+    if (!res) return [];
+    return await res.json();
+  };
+
   const updateBadge = (bookmarks) => {
     chrome.runtime.sendMessage({
       type: "UPDATE_BADGE",
@@ -79,46 +131,29 @@
     const saveBookmark = async () => {
       const note = input.value.trim();
       const desc = note || "Bookmark at " + getTime(capturedTime);
-      const newBookmark = { time: capturedTime, desc };
 
-      // currentVideoBookmarks = await fetchBookmarks();
-      // const updatedBookmarks = [...currentVideoBookmarks, newBookmark].sort(
-      //   (a, b) => a.time - b.time
-      // );
+      const res = await authFetch(`${API_BASE}/api/bookmarks/add/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoId: currentVideo,
+          time: capturedTime,
+          desc,
+        }),
+      });
 
-      // chrome.storage.sync.set(
-      //   { [currentVideo]: JSON.stringify(updatedBookmarks) },
-      //   () => {
-      //     chrome.runtime.sendMessage({
-      //       type: "BOOKMARK_SAVED",
-      //       videoId: currentVideo,
-      //       bookmarks: updatedBookmarks,
-      //     });
-      //     updateBadge(updatedBookmarks);
-      //   }
-      // );
+      if (!res || !res.ok) {
+        console.error("[YT Bookmarks] Failed to save bookmark");
+        closeModal(true);
+        return;
+      }
 
-      // closeModal(true);
-
-      const {token} = await chrome.storage.local.get("token");
-      await fetch("http://127.0.0.1:8000/api/bookmarks/add/",{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "Authorization":"Bearer " + token
-        },
-        body:JSON.stringify({
-          videoId:currentVideo,
-          time:capturedTime,
-          desc
-        })
-      })
       currentVideoBookmarks = await fetchBookmarks();
       chrome.runtime.sendMessage({
-        type:"BOOKMARK_SAVED",
-        videoId:currentVideo,
-        bookmarks:currentVideoBookmarks
-      })
+        type: "BOOKMARK_SAVED",
+        videoId: currentVideo,
+        bookmarks: currentVideoBookmarks,
+      });
       updateBadge(currentVideoBookmarks);
       closeModal(true);
     };
@@ -181,16 +216,37 @@
       youtubePlayer.currentTime = Number(value);
       youtubePlayer.play();
     } else if (type === "DELETE") {
-      currentVideoBookmarks = currentVideoBookmarks.filter((b) => b.time != value);
-      chrome.storage.sync.set({ [currentVideo]: JSON.stringify(currentVideoBookmarks) });
-      updateBadge(currentVideoBookmarks);
-      response(currentVideoBookmarks);
+      // Call backend API to delete
+      (async () => {
+        await authFetch(`${API_BASE}/api/bookmarks/delete/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            videoId: currentVideo,
+            time: value,
+          }),
+        });
+        currentVideoBookmarks = await fetchBookmarks();
+        updateBadge(currentVideoBookmarks);
+        response(currentVideoBookmarks);
+      })();
+      return true; // keep message channel open for async response
     } else if (type === "EDIT") {
-      currentVideoBookmarks = currentVideoBookmarks.map((b) =>
-        Number(b.time) === Number(value.time) ? { ...b, desc: value.desc } : b
-      );
-      chrome.storage.sync.set({ [currentVideo]: JSON.stringify(currentVideoBookmarks) });
-      response(currentVideoBookmarks);
+      // Call backend API to edit
+      (async () => {
+        await authFetch(`${API_BASE}/api/bookmarks/edit/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            videoId: currentVideo,
+            time: value.time,
+            desc: value.desc,
+          }),
+        });
+        currentVideoBookmarks = await fetchBookmarks();
+        response(currentVideoBookmarks);
+      })();
+      return true; // keep message channel open for async response
     }
   });
 

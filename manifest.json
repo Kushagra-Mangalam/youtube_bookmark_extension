@@ -8,7 +8,8 @@
   ],
   "host_permissions": [
     "https://*.youtube.com/*",
-    "http://127.0.0.1:8000/"
+    "http://127.0.0.1:8000/*",
+    "https://youtube-bookmark-backend.onrender.com/*"
   ],
   "background": {
     "service_worker": "background.js"
