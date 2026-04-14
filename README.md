@@ -1,4 +1,4 @@
-# 🔖 Kush YT Bookmarks — Chrome Extension
+# 🔖 YTMARKER'S — Chrome Extension
 
 Save timestamps on any YouTube video with a single click. Bookmarks are synced to the cloud via the YTMarker's backend, so they show up on the [YTMarker's website](https://youtube-bookmark-frontend.vercel.app/) too.
 
@@ -81,52 +81,3 @@ Click **"Copy All"** to copy all bookmarks for the current video to your clipboa
 Click the **Logout** button in the popup header to sign out.
 
 ---
-
-## 📁 Project Structure
-
-```
-Youtube_bookmark/
-├── manifest.json       # Extension configuration
-├── background.js       # Service worker (badge updates, tab events)
-├── contentScript.js    # Injected into YouTube pages (bookmark button + modal)
-├── popup.html          # Extension popup UI
-├── popup.js            # Popup logic (auth, CRUD, rendering)
-├── popup.css           # Popup styles
-├── utils.js            # Helper utilities
-└── assets/             # Icons and images
-    ├── ext-icon.png
-    ├── bookmark.png
-    ├── play.png
-    ├── delete.png
-    └── save.png
-```
-
----
-
-## ⚙️ Configuration
-
-The extension connects to the backend at `http://127.0.0.1:8000` by default (local development). To point it to the production backend, update the `API_BASE` constant in:
-
-- `popup.js` (line 3)
-- `contentScript.js` (line 2)
-
-```js
-const API_BASE = "https://youtube-bookmark-backend.onrender.com";
-```
-
----
-
-## 🛠 Troubleshooting
-
-| Issue | Fix |
-|---|---|
-| Extension doesn't appear | Make sure Developer Mode is ON and you loaded the correct folder |
-| Login fails | Ensure the backend server is running (`python manage.py runserver`) |
-| Bookmarks don't save | Check the browser console (F12) for 401 errors — try logging out and back in |
-| Bookmark button missing on YouTube | Refresh the YouTube page or reload the extension |
-
----
-
-## 📄 License
-
-MIT
