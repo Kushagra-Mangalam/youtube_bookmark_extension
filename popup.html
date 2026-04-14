@@ -7,10 +7,12 @@
 
 <body>
     <!-- Auth view: shown when no token is stored -->
-    <div id="auth-container" style="display: none; padding: 20px;">
-        <div class="title" style="margin-bottom: 12px;">Login to YTMarker's</div>
-        <input id="email" type="email" placeholder="Email" style="width:100%; margin: 5px 0; padding: 8px; box-sizing: border-box; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff;">
-        <input id="password" type="password" placeholder="Password" style="width:100%; margin: 5px 0; padding: 8px; box-sizing: border-box; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff;">
+    <div id="auth-container" class="container" style="display: none; padding: 20px;">
+        <div class="title" style="margin-bottom: 30px;">Login to YTMarker's</div>
+        <input id="email" type="email" placeholder="Email"
+            style="width:100%; margin: 5px 0; padding: 8px; box-sizing: border-box; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff;">
+        <input id="password" type="password" placeholder="Password"
+            style="width:100%; margin: 5px 0; padding: 8px; box-sizing: border-box; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff;">
         <button id="login-btn"
             style="width:100%; background: #ff0000; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 8px;">Login</button>
     </div>
@@ -21,7 +23,8 @@
             <div class="title">Your Bookmarks</div>
             <div style="display: flex; gap: 6px;">
                 <button id="export-btn">Copy All</button>
-                <button id="logout-btn" title="Logout" style="background: #333; border: 1px solid #555; color: #aaa; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;">Logout</button>
+                <button id="logout-btn" title="Logout"
+                    style="background: #333; border: 1px solid #555; color: #aaa; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;">Logout</button>
             </div>
         </div>
         <div class="bookmarks" id="bookmarks"></div>
