@@ -22,7 +22,7 @@ Save timestamps on any YouTube video with a single click. Bookmarks are synced t
 Clone or download this repository to your local machine:
 
 ```bash
-git clone https://github.com/kushwanthreddy/Youtube_bookmark.git
+git clone https://github.com/Kushagra-Mangalam/youtube_bookmark_extension.git
 ```
 
 Or download as ZIP and extract it to a folder.
