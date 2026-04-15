@@ -174,34 +174,41 @@
   // ── Bookmark Button ───────────────────────────────────────────────────────
 
   const newVideoLoaded = async () => {
-    const bookmarkBtnExists = document.getElementsByClassName("bookmark-btn")[0];
     currentVideoBookmarks = await fetchBookmarks();
     updateBadge(currentVideoBookmarks);
 
-    if (!bookmarkBtnExists) {
-      const bookmarkBtn = document.createElement("img");
-      bookmarkBtn.src = chrome.runtime.getURL("assets/bookmark.png");
-      bookmarkBtn.className = "ytp-button bookmark-btn";
-      bookmarkBtn.title = "Click to bookmark current timestamp";
+    const initBtn = () => {
+      const bookmarkBtnExists = document.getElementsByClassName("bookmark-btn")[0];
+      if (bookmarkBtnExists) return;
 
       youtubeLeftControls = document.getElementsByClassName("ytp-left-controls")[0];
       youtubePlayer = document.getElementsByClassName("video-stream")[0];
 
-      youtubeLeftControls.appendChild(bookmarkBtn);
-      bookmarkBtn.addEventListener("click", () => {
-        // Bounce animation
-        bookmarkBtn.classList.remove("yt-bm-clicked");
-        void bookmarkBtn.offsetWidth; // force reflow so re-clicking resets it
-        bookmarkBtn.classList.add("yt-bm-clicked");
-        bookmarkBtn.addEventListener(
-          "animationend",
-          () => bookmarkBtn.classList.remove("yt-bm-clicked"),
-          { once: true }
-        );
+      if (youtubeLeftControls && youtubePlayer) {
+        const bookmarkBtn = document.createElement("img");
+        bookmarkBtn.src = chrome.runtime.getURL("assets/bookmark.png");
+        bookmarkBtn.className = "ytp-button bookmark-btn";
+        bookmarkBtn.title = "Click to bookmark current timestamp";
 
-        showContextModal(youtubePlayer.currentTime);
-      });
-    }
+        youtubeLeftControls.appendChild(bookmarkBtn);
+        bookmarkBtn.addEventListener("click", () => {
+          // Bounce animation
+          bookmarkBtn.classList.remove("yt-bm-clicked");
+          void bookmarkBtn.offsetWidth; // force reflow so re-clicking resets it
+          bookmarkBtn.classList.add("yt-bm-clicked");
+          bookmarkBtn.addEventListener(
+            "animationend",
+            () => bookmarkBtn.classList.remove("yt-bm-clicked"),
+            { once: true }
+          );
+
+          showContextModal(youtubePlayer.currentTime);
+        });
+      } else {
+        setTimeout(initBtn, 200);
+      }
+    };
+    initBtn();
   };
 
   // ── Message Listener ──────────────────────────────────────────────────────
