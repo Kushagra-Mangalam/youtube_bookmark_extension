@@ -350,6 +350,10 @@
       #yt-bm-save:hover { background: #cc0000; }
 
       .bookmark-btn {
+        width:32px;
+        height:32px;
+        padding:5px;
+        cursor:pointer;
         transition: transform 0.1s ease;
       }
       @keyframes yt-bm-bounce {
@@ -367,5 +371,5 @@
   };
 
   injectModalStyles();
-  setTimeout(newVideoLoaded, 1500);
+  // setTimeout(newVideoLoaded, 1500);
 })();
